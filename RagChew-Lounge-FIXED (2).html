@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RagChew Lounge - FIXED VFO</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+.font-mono{font-family:"JetBrains Mono",monospace}
+.vfo-glow{text-shadow:0 0 12px rgba(34,197,94,0.9),0 0 28px rgba(34,197,94,0.5)}
+.ptt-glow{box-shadow:0 0 0 2px rgba(59,130,246,0.3),0 0 24px rgba(37,99,235,0.5),inset 0 1px 2px rgba(255,255,255,0.2)}
+</style>
+</head>
+<body class="bg-[#0a0f1a] text-[#d1d9e6]">
+<div id="root"></div>
+<script type="module">
+import React from 'https://esm.sh/react@18.3.1';
+import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
+
+const STRIPE_URL = "https://buy.stripe.com/00w5kDfSSfuh0BL6rR2Fa04";
+const ROOMS = [
+  { id: "20m", name: "20 Metre Lounge", freq: "14.200", vfo: "14.199.92", band: "20m • 14 MHz", desc: "General ragchewing on 20 metres. Friendly worldwide conversation.", icon: "📻", mode: "USB" },
+  { id: "40m", name: "40 Metre Lounge", freq: "7.100", vfo: "7.100.25", band: "40m • 7 MHz", desc: "Regional chatting and evening ragchews.", icon: "🌍", mode: "LSB" },
+  { id: "night", name: "Night Owl Lounge", freq: "3.750", vfo: "3.750.15", band: "80m • 3.7 MHz", desc: "Late night ragchew, stories & friendship after hours.", icon: "🌙", mode: "LSB" },
+  { id: "dx", name: "DX Chasers Lounge", freq: "21.300", vfo: "21.300.00", band: "15m • 21 MHz", desc: "Long distance hunters and pileup talk.", icon: "🎯", mode: "USB" },
+];
+
+function App(){
+  const [premium,setPremium]=React.useState(false);
+  const [isAdmin,setIsAdmin]=React.useState(false);
+  const [trialDays,setTrialDays]=React.useState(15);
+  const [selectedRoom,setSelectedRoom]=React.useState("20m");
+  const [callsign,setCallsign]=React.useState("");
+  const [name,setName]=React.useState("");
+  const [showUnlock,setShowUnlock]=React.useState(false);
+  const [code,setCode]=React.useState("");
+  const [codeError,setCodeError]=React.useState("");
+  const [codeSuccess,setCodeSuccess]=React.useState("");
+  const [toast,setToast]=React.useState("");
+  const [fineTune,setFineTune]=React.useState(0); // in Hz * 0.01
+
+  React.useEffect(()=>{
+    const p=localStorage.getItem("ragchew_premium")==="true";
+    const a=localStorage.getItem("ragchew_is_admin")==="true";
+    setPremium(p); setIsAdmin(a);
+    let start=localStorage.getItem("ragchew_trial_start");
+    if(!start){start=Date.now().toString(); localStorage.setItem("ragchew_trial_start",start);}
+    const daysPassed=Math.floor((Date.now()-parseInt(start,10))/86400000);
+    const left=Math.max(0,15-daysPassed); setTrialDays(left);
+  },[]);
+
+  // FIXED LOCK LOGIC
+  const isLocked = (roomId)=>{
+    if(roomId==="20m") return false;
+    if(premium || isAdmin) return false;
+    return true;
+  };
+
+  const openStripe=()=>{
+    setToast("Opening Stripe checkout — 20.00 EURO / 25 DOLLARS...");
+    window.open(STRIPE_URL,"_blank","noopener,noreferrer");
+    setTimeout(()=>setToast(""),4000);
+  };
+
+  const handleUnlock=()=>{
+    const c=code.trim().toLowerCase().replace(/\s+/g,"");
+    const raw=code.trim().toLowerCase();
+    if(c==="claddagh25"){
+      localStorage.setItem("ragchew_premium","true"); setPremium(true); setCodeError(""); setCodeSuccess("✅ Full Access Unlocked! All lounges now open");
+      setTimeout(()=>{setShowUnlock(false); setCodeSuccess(""); setCode("");},2500);
+    }else if(c==="james007"||raw==="james007"){
+      localStorage.setItem("ragchew_premium","true"); localStorage.setItem("ragchew_is_admin","true"); setPremium(true); setIsAdmin(true); setCodeError(""); setCodeSuccess("✅ Admin Unlocked 👑");
+      setTimeout(()=>{setShowUnlock(false); setCodeSuccess(""); setCode("");},2500);
+    }else{setCodeError("Invalid code."); setCodeSuccess("");}
+  };
+
+  const currentRoom = ROOMS.find(r=>r.id===selectedRoom) || ROOMS[0];
+  
+  // === KEY FIX: Dynamic VFO ===
+  const handleJoinRoom = (roomId) => {
+    setSelectedRoom(roomId);
+    setFineTune(0); // reset fine tune on band change
+    setToast(`Tuned to ${ROOMS.find(r=>r.id===roomId).name} — ${ROOMS.find(r=>r.id===roomId).freq} MHz`);
+    setTimeout(()=>setToast(""),2500);
+  };
+
+  // Calculate display frequency with fine tuning
+  const baseVfo = parseFloat(currentRoom.vfo);
+  const displayFreq = (baseVfo + fineTune/100000).toFixed(5); // adds ±0.010 kHz range
+
+  return React.createElement("div",{className:"min-h-screen bg-[#0a0f1a]"},
+    React.createElement("header",{className:"border-b border-[#1b2436]/80 bg-[#0b1018]/90 sticky top-0 z-30"},
+      React.createElement("div",{className:"max-w-[1600px] mx-auto px-4 py-4 flex flex-col items-center gap-3"},
+        React.createElement("h1",{onClick:()=>setShowUnlock(true),className:"text-[28px] md:text-[40px] font-extrabold text-white cursor-pointer flex items-center gap-2"},"🎙 RagChew Lounge"),
+        React.createElement("div",{className:"flex flex-wrap justify-center gap-2"},
+          React.createElement("div",{className:"px-3 py-1.5 rounded-full bg-[#121a2a] border border-[#1e2a41] text-[12px]"},"● Live Stations On Air: 0 at present"),
+          React.createElement("button",{onClick:openStripe,className:"px-5 py-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-600 text-white font-bold text-[12px] hover:brightness-110"},"⬆ Upgrade - 20.00 EURO / 25 DOLLARS - Buy Now"),
+          React.createElement("div",{className:"px-3 py-1.5 rounded-full bg-[#111a2a] border border-[#21304d] text-[#fde68a] text-[12px]"},"🎁 Free Trial: "+trialDays+" days left")
+        )
+      )
+    ),
+    React.createElement("div",{className:"max-w-[1600px] mx-auto px-3 py-6 grid lg:grid-cols-[300px_1fr_320px] gap-5"},
+      // LEFT
+      React.createElement("div",{className:"flex flex-col gap-4"},
+        React.createElement("div",{className:"rounded-[14px] bg-[#111827]/80 border border-[#1e293b] p-4"},
+          React.createElement("h2",{className:"text-[11px] tracking-[0.18em] text-[#7a8aa6] font-bold mb-3"},"YOUR STATION"),
+          React.createElement("input",{value:callsign,onChange:e=>setCallsign(e.target.value),placeholder:"Enter Callsign",className:"w-full bg-[#0b1018] border border-[#1e2a3f] rounded-[8px] px-3 py-2 mb-2 text-sm outline-none focus:border-blue-500"}),
+          React.createElement("input",{value:name,onChange:e=>setName(e.target.value),placeholder:"Name (optional) - e.g. Alex",className:"w-full bg-[#0b1018] border border-[#1e2a3f] rounded-[8px] px-3 py-2 text-sm outline-none focus:border-blue-500"})
+        ),
+        React.createElement("div",{className:"rounded-[14px] bg-[#111827]/70 border border-[#1e293b] p-3"},
+          React.createElement("h2",{className:"text-[11px] tracking-[0.18em] text-[#7a8aa6] font-bold mb-3"},"LOUNGE ROOMS • 4 ACTIVE"),
+          ROOMS.map(room=>{
+            const locked=isLocked(room.id);
+            const active=selectedRoom===room.id;
+            return React.createElement("div",{key:room.id,className:`relative rounded-[12px] border p-3 mb-3 transition-all ${active?"border-[#22c55e]/60 bg-[#0f1e14]":"bg-[#0f172a] border-[#1e293b]"}`},
+              React.createElement("div",{className:"flex gap-3"},
+                React.createElement("div",{className:"text-[18px]"},room.icon),
+                React.createElement("div",{className:"flex-1"},
+                  React.createElement("div",{className:"flex items-center gap-2"}, 
+                    React.createElement("div",{className:"font-bold text-white text-[14px]"},room.name), 
+                    React.createElement("div",{className:"text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#0b1018] border border-[#1e293b] text-[#7a8aa6]"},room.freq)
+                  ),
+                  React.createElement("div",{className:"text-[12px] text-[#7a8aa6] mt-1 leading-snug"},room.desc),
+                  !locked && active ? React.createElement("div",{className:"mt-3 h-[36px] rounded-[8px] bg-[#0d1f15] border border-[#22c55e]/40 flex items-center justify-center text-[#4ade80] font-bold text-[13px]"},"● LIVE • "+room.band)
+                  : locked ? React.createElement("button",{onClick:()=>setShowUnlock(true),className:"mt-3 w-full h-[36px] rounded-[8px] bg-[#121a2a] border border-dashed border-[#2a3a55] text-[#8aa0c0] text-[13px] hover:bg-[#1a2540]"},"🔒 Locked - Upgrade to Join")
+                  : React.createElement("button",{onClick:()=>handleJoinRoom(room.id),className:"mt-3 w-full h-[36px] rounded-[8px] bg-[#1e293b] hover:bg-[#26354f] border border-[#2a3a55] text-white text-[13px] font-semibold transition-colors"},"Join Room")
+                )
+              ),
+              locked && React.createElement("div",{className:"absolute -bottom-px left-0 right-0 bg-[#0b1018]/95 border-t border-[#1e293b] rounded-b-[12px] px-2.5 py-1.5 flex justify-between items-center backdrop-blur"},
+                React.createElement("div",{className:"text-[11px] text-[#fbbf24]"},"🔒 Premium Only"),
+                React.createElement("button",{onClick:openStripe,className:"px-3 py-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-[11px] font-bold text-white"},"Buy")
+              ),
+              locked && React.createElement("div",{className:"h-[28px]"})
+            )
+          })
+        )
+      ),
+      // CENTER TRANSCEIVER - FIXED
+      React.createElement("div",{className:"rounded-[16px] bg-[#151c2b] border border-[#22304a] p-5 flex flex-col"},
+        React.createElement("div",{className:"flex justify-between items-center mb-4"},
+          React.createElement("h2",{className:"text-[11px] tracking-[0.18em] text-[#7a8aa6] font-bold"},"HF TRANSCEIVER • RAGCHEW EDITION"),
+          React.createElement("div",{className:"flex items-center gap-2"},
+            React.createElement("div",{className:"px-2.5 py-1 rounded-full bg-[#0b1018] border border-[#1e293b] text-[10px] text-[#5a6a85]"},"TX"),
+            React.createElement("div",{className:"px-2.5 py-1 rounded-full bg-[#0d1f15] border border-[#22c55e]/30 text-[10px] text-[#4ade80] font-bold shadow-[0_0_10px_rgba(34,197,94,0.3)]"},"● RX")
+          )
+        ),
+        // VFO DISPLAY - NOW DYNAMIC
+        React.createElement("div",{className:"rounded-[12px] bg-gradient-to-b from-[#0a1a12] to-[#08140f] border border-[#123524] p-4 shadow-inner"},
+          React.createElement("div",{className:"flex justify-between items-start"},
+            React.createElement("div",{className:"font-mono font-bold text-[38px] md:text-[42px] leading-none text-[#4ade80] vfo-glow tracking-tight"},displayFreq),
+            React.createElement("div",{className:"text-right"},
+              React.createElement("div",{className:"text-[13px] font-bold text-[#4ade80] tracking-widest"},currentRoom.mode),
+              React.createElement("div",{className:"text-[10px] text-[#2a5a3a] tracking-widest mt-1"},"S-METER • S3")
+            )
+          ),
+          React.createElement("div",{className:"flex items-center gap-2 mt-3"},
+            React.createElement("div",{className:"text-[10px] font-bold tracking-[0.15em] text-[#2e7d4a]"},"VFO A"),
+            React.createElement("div",{className:"text-[11px] text-[#5a8a6a]"},currentRoom.name+" • RagChew"),
+            React.createElement("div",{className:"ml-auto px-2 py-0.5 rounded bg-[#123524] text-[10px] text-[#4ade80] border border-[#1a3a26]"},"WIDE")
+          ),
+          React.createElement("div",{className:"mt-3 h-[6px] rounded-full bg-[#0b1018] border border-[#123524] overflow-hidden flex gap-[2px] p-[2px]"},
+            React.createElement("div",{className:"h-full w-[8%] bg-[#22c55e] rounded-full shadow-[0_0_6px_#22c55e]"}),
+            React.createElement("div",{className:"h-full w-[4%] bg-[#22c55e]/80 rounded-full"}),
+            React.createElement("div",{className:"h-full w-[4%] bg-[#22c55e]/60 rounded-full"})
+          )
+        ),
+        // TUNE CONTROLS - NOW FUNCTIONAL
+        React.createElement("div",{className:"mt-4 rounded-[12px] bg-[#0f172a]/60 border border-[#1e293b] p-3 flex flex-col gap-2"},
+          React.createElement("div",{className:"flex justify-between text-[10px] tracking-widest text-[#5a6a85]"},
+            React.createElement("span",null,"TUNE"),
+            React.createElement("span",{className:"font-mono text-[#4ade80] bg-[#0b1018] border border-[#1e293b] px-2 py-0.5 rounded"},(fineTune>0?"+":"")+(fineTune/1000).toFixed(1)+" kHz")
+          ),
+          React.createElement("div",{className:"text-[11px] text-[#7a8aa6]"},"Slide to tune ±10 kHz • tap ± for fine"),
+          React.createElement("div",{className:"flex items-center gap-2 mt-1"},
+            React.createElement("button",{onClick:()=>setFineTune(v=>Math.max(-10000,v-100)),className:"w-8 h-8 rounded-full bg-[#0b1018] border border-[#1e293b] text-white hover:bg-[#1e293b]"},"−"),
+            React.createElement("input",{type:"range",min:-10000,max:10000,step:10,value:fineTune,onChange:e=>setFineTune(parseInt(e.target.value)),className:"flex-1 accent-[#22c55e]"}),
+            React.createElement("button",{onClick:()=>setFineTune(v=>Math.min(10000,v+100)),className:"w-8 h-8 rounded-full bg-[#0b1018] border border-[#1e293b] text-white hover:bg-[#1e293b]"},"+")
+          ),
+          React.createElement("div",{className:"text-center font-mono text-[12px] text-[#cbd5e1] mt-1"},displayFreq+" MHz"),
+          React.createElement("div",{className:"text-center text-[10px] text-[#5a6a85]"},currentRoom.band+" • drag track or tap ±100Hz")
+        ),
+        React.createElement("div",{className:"mt-8 flex flex-col items-center flex-1 justify-center"},
+          React.createElement("div",{className:"w-[148px] h-[148px] rounded-full bg-gradient-to-b from-[#1e3a8a] to-[#172554] border-[3px] border-[#3b82f6] ptt-glow flex flex-col items-center justify-center cursor-pointer active:scale-95 transition-transform select-none"},
+            React.createElement("div",{className:"text-[28px]"},"🎙"),
+            React.createElement("div",{className:"font-extrabold text-white tracking-[0.15em] mt-1"},"PTT"),
+            React.createElement("div",{className:"text-[10px] tracking-[0.2em] text-[#93c5fd] font-bold mt-1"},"HOLD TO TALK")
+          ),
+          React.createElement("div",{className:"mt-6 flex gap-6"},
+            ["VOLUME","AF GAIN","RF GAIN","SQUELCH"].map((k,i)=> React.createElement("div",{key:k,className:"flex flex-col items-center"},
+              React.createElement("div",{className:"w-[56px] h-[56px] rounded-full bg-[#0f172a] border border-[#1e293b] shadow-inner flex items-center justify-center text-[#475569]"},"◍"),
+              React.createElement("div",{className:"text-[10px] tracking-widest text-[#5a6a85] mt-2"},k),
+              React.createElement("div",{className:"text-[11px] font-mono text-[#cbd5e1] mt-1 bg-[#0b1018] border border-[#1e293b] px-2 py-0.5 rounded"},[72,65,82,15][i])
+            ))
+          )
+        )
+      ),
+      // RIGHT CHAT - DYNAMIC
+      React.createElement("div",{className:"rounded-[14px] bg-[#111827]/70 border border-[#1e293b] p-4 flex flex-col"},
+        React.createElement("div",{className:"flex justify-between items-center"},
+          React.createElement("h2",{className:"text-[11px] tracking-[0.18em] text-[#7a8aa6] font-bold"},"ROOM CHAT • "+currentRoom.name.toUpperCase()),
+          React.createElement("div",{className:"w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_#22c55e]"})
+        ),
+        React.createElement("div",{className:"mt-4 p-3 rounded-[12px] bg-[#0f172a] border border-[#1e293b]"},
+          React.createElement("div",{className:"flex justify-between"},
+            React.createElement("div",{className:"font-bold text-white text-[14px]"},currentRoom.name),
+            React.createElement("div",{className:"text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#0b1018] border border-[#1e293b] text-[#7a8aa6] h-fit"},currentRoom.freq)
+          ),
+          React.createElement("div",{className:"text-[12px] text-[#7a8aa6] mt-1 leading-snug"},currentRoom.desc),
+          React.createElement("div",{className:"mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#0d1f15] border border-[#1a3a26] text-[11px] text-[#4ade80]"},"● 0 operators")
+        ),
+        React.createElement("div",{className:"mt-auto pt-6 text-center"},
+          React.createElement("div",{className:`text-[12px] px-3 py-2 rounded-full border ${premium||isAdmin?"bg-[#0d1f15] border-[#1a3a26] text-[#4ade80]":"bg-[#1a1010] border-[#2a1a1a] text-[#fbbf24]"}`}, premium||isAdmin ? "✅ Premium • All rooms unlocked - VFO active" : `🔒 Viewing ${currentRoom.name} - Upgrade to TX on 40m, Night, DX`),
+          !premium && React.createElement("button",{onClick:openStripe,className:"mt-3 w-full h-[40px] rounded-[10px] bg-gradient-to-r from-amber-400 to-orange-600 text-white font-bold text-[13px]"},"Upgrade to Talk Everywhere")
+        )
+      )
+    ),
+    // UNLOCK MODAL
+    showUnlock && React.createElement("div",{className:"fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm", onClick:e=>{if(e.target===e.currentTarget)setShowUnlock(false)}},
+      React.createElement("div",{className:"w-full max-w-[420px] rounded-[16px] bg-[#111827] border border-[#22304a] overflow-hidden shadow-2xl"},
+        React.createElement("div",{className:"px-6 py-5 border-b border-[#1e2a41] flex justify-between items-start"},
+          React.createElement("div",null, React.createElement("h3",{className:"text-[18px] font-extrabold text-white"},"Unlock Full Access"), React.createElement("p",{className:"text-[12px] text-[#7a8aa6] mt-1"},"All 4 lounges + HF transceiver retunes")),
+          React.createElement("button",{onClick:()=>setShowUnlock(false),className:"w-8 h-8 rounded-full bg-[#0b1018] border border-[#1e293b] text-[#94a3b8] hover:text-white"},"✕")
+        ),
+        React.createElement("div",{className:"p-6"},
+          React.createElement("ul",{className:"space-y-2 text-[13px] text-[#cbd5e1] mb-4"},
+            React.createElement("li",null,"✓ 20m • 14.200 MHz, 40m • 7.100 MHz, 80m Night • 3.750 MHz, 15m DX • 21.300 MHz"),
+            React.createElement("li",null,"✓ VFO retunes instantly on Join"),
+            React.createElement("li",null,"✓ HD 48kHz Opus audio")
+          ),
+          React.createElement("button",{onClick:openStripe,className:"w-full h-[44px] rounded-[10px] bg-gradient-to-r from-amber-400 to-orange-600 text-white font-bold hover:brightness-110"},"Buy Now - 20.00 EURO / 25 DOLLARS"),
+          React.createElement("div",{className:"my-5 h-[1px] bg-[#1e293b]"}),
+          React.createElement("input",{value:code,onChange:e=>{setCode(e.target.value); setCodeError("");},placeholder:"e.g. claddagh25 or james007",className:"w-full bg-[#0b1018] border border-[#1e2a3f] rounded-[8px] px-3 py-2.5 text-sm text-white mb-2 outline-none focus:border-amber-500"}),
+          React.createElement("button",{onClick:handleUnlock,className:"w-full h-[40px] rounded-[8px] bg-[#1e293b] hover:bg-[#26354f] text-white font-semibold transition-colors"},"Unlock"),
+          codeError && React.createElement("div",{className:"mt-2 text-[12px] text-[#f87171] bg-[#1a1010] border border-[#3a1a1a] rounded px-3 py-2"},codeError),
+          codeSuccess && React.createElement("div",{className:"mt-2 text-[12px] text-[#4ade80] bg-[#0d1f15] border border-[#1a3a26] rounded px-3 py-2"},codeSuccess)
+        )
+      )
+    ),
+    toast && React.createElement("div",{className:"fixed top-[88px] left-1/2 -translate-x-1/2 px-5 py-3 rounded-full bg-[#f59e0b] text-black font-bold text-[13px] shadow-xl z-50 animate-bounce"},toast)
+  )
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
