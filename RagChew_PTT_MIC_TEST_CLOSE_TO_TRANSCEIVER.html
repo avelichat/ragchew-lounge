@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RagChew Lounge — V2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+.font-mono{font-family:"JetBrains Mono",monospace}
+.vfo-glow{text-shadow:0 0 12px rgba(34,197,94,.9),0 0 28px rgba(34,197,94,.45)}
+.ptt-glow{box-shadow:0 0 0 2px rgba(59,130,246,.3),0 0 24px rgba(37,99,235,.5),inset 0 1px 2px rgba(255,255,255,.2)}
+</style>
+</head>
+<body class="bg-[#0a0f1a] text-[#d1d9e6]">
+<div id="root"></div>
+
+<script type="module">
+import React from 'https://esm.sh/react@18.3.1';
+import ReactDOM from 'https://esm.sh/react-dom@18.3.1/client';
+
+const STRIPE_URL = "https://buy.stripe.com/00w5kDfSSfuh0BL6rR2Fa04";
+const UNLOCK_PASSWORD = "claddagh25";
+
+const ROOMS = [
+  {id:"20m", name:"20 Metre Lounge", freq:"14.200", vfo:"14.199.92", band:"20m • 14 MHz", desc:"Free access • Friendly worldwide ragchewing.", icon:"📻", mode:"USB"},
+  {id:"40m", name:"40 Metre Lounge", freq:"7.100", vfo:"7.100.25", band:"40m • 7 MHz", desc:"Premium access • Regional and evening ragchews.", icon:"🌍", mode:"LSB"},
+  {id:"night", name:"Night Owl Lounge", freq:"3.750", vfo:"3.750.15", band:"80m • 3.7 MHz", desc:"Premium access • Late-night ragchew and friendship.", icon:"🌙", mode:"LSB"},
+  {id:"dx", name:"DX Chasers Lounge", freq:"21.300", vfo:"21.300.00", band:"15m • 21 MHz", desc:"Premium access • Long-distance DX conversations.", icon:"🎯", mode:"USB"}
+];
+
+function App(){
+  const [premium,setPremium]=React.useState(true);
+  const [selectedRoom,setSelectedRoom]=React.useState("20m");
+  const [callsign,setCallsign]=React.useState("");
+  const [name,setName]=React.useState("");
+  const [showUnlock,setShowUnlock]=React.useState(false);
+  const [code,setCode]=React.useState("");
+  const [error,setError]=React.useState("");
+  const [success,setSuccess]=React.useState("");
+  const [toast,setToast]=React.useState("");
+  const [fineTune,setFineTune]=React.useState(0);
+
+  React.useEffect(()=>{
+    setPremium(localStorage.getItem("ragchew_premium_v2")==="true");
+  },[]);
+
+  const isLocked = (roomId) => false;
+
+  const openStripe = () => {
+    window.open(STRIPE_URL,"_blank","noopener,noreferrer");
+  };
+
+  const handleUnlock = () => {
+    if(code.trim().toLowerCase() === UNLOCK_PASSWORD.toLowerCase()){
+      localStorage.setItem("ragchew_premium_v2","true");
+      setPremium(true);
+      setError("");
+      setSuccess("✅ Premium access unlocked — all rooms are now open.");
+      setCode("");
+      setTimeout(()=>{
+        setShowUnlock(false);
+        setSuccess("");
+      },2200);
+    } else {
+      setError("That password is not correct. Please check the password you received after upgrading.");
+      setSuccess("");
+    }
+  };
+
+  const joinRoom = (roomId) => {
+    if(isLocked(roomId)){
+      setShowUnlock(true);
+      return;
+    }
+    const room = ROOMS.find(r=>r.id===roomId);
+    setSelectedRoom(roomId);
+    setFineTune(0);
+    setToast(`Tuned to ${room.name}`);
+    setTimeout(()=>setToast(""),2200);
+  };
+
+  const [micStream,setMicStream]=React.useState(null);
+  const [ptt,setPtt]=React.useState(false);
+  const [micError,setMicError]=React.useState("");
+  const micTrackRef=React.useRef(null);
+
+  const startMic = async () => {
+    setMicError("");
+    if(micTrackRef.current) return true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio:{
+          channelCount:1,
+          sampleRate:48000,
+          echoCancellation:true,
+          noiseSuppression:true,
+          autoGainControl:true
+        }
+      });
+      const track = stream.getAudioTracks()[0];
+      track.enabled = false;
+      micTrackRef.current = track;
+      setMicStream(stream);
+      return true;
+    } catch(err) {
+      setMicError("Microphone permission was not granted.");
+      return false;
+    }
+  };
+
+  const pressPTT = async () => {
+    const ok = await startMic();
+    if(!ok) return;
+    if(micTrackRef.current){
+      micTrackRef.current.enabled = true;
+      setPtt(true);
+    }
+  };
+
+  const releasePTT = () => {
+    if(micTrackRef.current) micTrackRef.current.enabled = false;
+    setPtt(false);
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if(micStream) micStream.getTracks().forEach(t=>t.stop());
+    };
+  },[micStream]);
+
+  const currentRoom = ROOMS.find(r=>r.id===selectedRoom) || ROOMS[0];
+  const displayFreq = (parseFloat(currentRoom.vfo) + fineTune/100000).toFixed(5);
+
+  return React.createElement("div",{className:"min-h-screen bg-[#0a0f1a]"},
+    React.createElement("header",{className:"border-b border-[#1b2436]/80 bg-[#0b1018]/95 sticky top-0 z-30"},
+      React.createElement("div",{className:"max-w-[1500px] mx-auto px-4 py-4 flex flex-col items-center gap-3"},
+        React.createElement("button",{
+          onClick:()=>setShowUnlock(true),
+          className:"text-[28px] md:text-[40px] font-extrabold text-white hover:text-[#4ade80] transition-colors"
+        },"🎙 RagChew Lounge"),
+        React.createElement("div",{className:"text-center text-[12px] text-[#7a8aa6]"},
+          "20m is free • Upgrade to unlock all rooms"
+        ),
+        React.createElement("div",{className:"flex flex-wrap justify-center gap-2"},
+          React.createElement("div",{className:"px-3 py-1.5 rounded-full bg-[#121a2a] border border-[#1e2a41] text-[12px]"},"● Live Stations On Air: 0"),
+          React.createElement("button",{
+            onClick:openStripe,
+            className:"px-5 py-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-600 text-white font-bold text-[12px] hover:brightness-110"
+          },"⬆ Upgrade — Unlock All Rooms")
+        )
+      )
+    ),
+
+    React.createElement("main",{className:"max-w-[1500px] mx-auto px-3 py-6 grid lg:grid-cols-[310px_1fr_320px] gap-5"},
+
+      React.createElement("section",{className:"flex flex-col gap-4"},
+        React.createElement("div",{className:"rounded-[14px] bg-[#111827]/80 border border-[#1e293b] p-4"},
+          React.createElement("h2",{className:"text-[11px] tracking-[.18em] text-[#7a8aa6] font-bold mb-3"},"YOUR STATION"),
+          React.createElement("input",{value:callsign,onChange:e=>setCallsign(e.target.value),placeholder:"Enter Callsign",className:"w-full bg-[#0b1018] border border-[#1e2a3f] rounded-[8px] px-3 py-2 mb-2 text-sm outline-none focus:border-blue-500"}),
+          React.createElement("input",{value:name,onChange:e=>setName(e.target.value),placeholder:"Name (optional)",className:"w-full bg-[#0b1018] border border-[#1e2a3f] rounded-[8px] px-3 py-2 text-sm outline-none focus:border-blue-500"})
+        ),
+
+        React.createElement("div",{className:"rounded-[14px] bg-[#111827]/70 border border-[#1e293b] p-3"},
+          React.createElement("div",{className:"flex items-center justify-between mb-3"},
+            React.createElement("h2",{className:"text-[11px] tracking-[.18em] text-[#7a8aa6] font-bold"},"LOUNGE ROOMS"),
+            React.createElement("span",{className:"text-[10px] text-[#4ade80]"},"20m FREE")
+          ),
+
+          ROOMS.map(room=>{
+            const locked=isLocked(room.id);
+            const active=selectedRoom===room.id;
+            return React.createElement("div",{key:room.id,className:`rounded-[12px] border p-3 mb-3 ${active?"border-[#22c55e]/60 bg-[#0f1e14]":"bg-[#0f172a] border-[#1e293b]"}`},
+              React.createElement("div",{className:"flex gap-3"},
+                React.createElement("div",{className:"text-[18px]"},room.icon),
+                React.createElement("div",{className:"flex-1 min-w-0"},
+                  React.createElement("div",{className:"flex items-center gap-2 flex-wrap"},
+                    React.createElement("div",{className:"font-bold text-white text-[14px]"},room.name),
+                    locked
+                      ? React.createElement("span",{className:"text-[10px] px-1.5 py-0.5 rounded bg-[#211a0b] border border-[#4a3610] text-[#fbbf24]"},"🔒 PREMIUM")
+                      : React.createElement("span",{className:"text-[10px] px-1.5 py-0.5 rounded bg-[#0d1f15] border border-[#1a3a26] text-[#4ade80]"},"OPEN")
+                  ),
+                  React.createElement("div",{className:"text-[12px] text-[#7a8aa6] mt-1"},room.desc),
+                  locked
+                    ? React.createElement("button",{onClick:()=>setShowUnlock(true),className:"mt-3 w-full h-[38px] rounded-[8px] bg-[#121a2a] border border-[#2a3a55] text-[#fbbf24] text-[13px] font-semibold hover:bg-[#1a2540]"},"🔒 Upgrade to Unlock")
+                    : active
+                      ? React.createElement("div",{className:"mt-3 h-[38px] rounded-[8px] bg-[#0d1f15] border border-[#22c55e]/40 flex items-center justify-center text-[#4ade80] font-bold text-[13px]"},"● LIVE • "+room.band)
+                      : React.createElement("button",{onClick:()=>joinRoom(room.id),className:"mt-3 w-full h-[38px] rounded-[8px] bg-[#1e293b] hover:bg-[#26354f] border border-[#2a3a55] text-white text-[13px] font-semibold"},"Join 20m")
+                )
+              )
+            )
+          })
+        ),
+
+        React.createElement("div",{className:"rounded-[14px] bg-[#111827]/70 border border-[#1e293b] p-4"},
+          React.createElement("div",{className:"text-[12px] font-bold text-white mb-2"},"How upgrading works"),
+          React.createElement("div",{className:"text-[12px] text-[#94a3b8] leading-relaxed"},
+            "1. Upgrade through Stripe.<br/>2. Receive your password.<br/>3. Click the RagChew Lounge logo above.<br/>4. Enter the password to unlock all rooms."
+          )
+        )
+      ),
+
+      React.createElement("section",{className:"rounded-[16px] bg-[#151c2b] border border-[#22304a] p-5 flex flex-col"},
+        React.createElement("div",{className:"flex justify-between items-center mb-4"},
+          React.createElement("h2",{className:"text-[11px] tracking-[.18em] text-[#7a8aa6] font-bold"},"HF TRANSCEIVER • RAGCHEW EDITION"),
+          React.createElement("div",{className:"flex items-center gap-2"},
+            React.createElement("div",{className:"px-2.5 py-1 rounded-full bg-[#0b1018] border border-[#1e293b] text-[10px] text-[#5a6a85]"},"TX"),
+            React.createElement("div",{className:"px-2.5 py-1 rounded-full bg-[#0d1f15] border border-[#22c55e]/30 text-[10px] text-[#4ade80] font-bold"},"● RX")
+          )
+        ),
+
+        React.createElement("div",{className:"rounded-[12px] bg-gradient-to-b from-[#0a1a12] to-[#08140f] border border-[#123524] p-4"},
+          React.createElement("div",{className:"flex justify-between items-start"},
+            React.createElement("div",{className:"font-mono font-bold text-[38px] md:text-[42px] leading-none text-[#4ade80] vfo-glow"},displayFreq),
+            React.createElement("div",{className:"text-right"},
+              React.createElement("div",{className:"text-[13px] font-bold text-[#4ade80] tracking-widest"},currentRoom.mode),
+              React.createElement("div",{className:"text-[10px] text-[#2a5a3a] tracking-widest mt-1"},"S-METER • S3")
+            )
+          ),
+          React.createElement("div",{className:"flex items-center gap-2 mt-3"},
+            React.createElement("div",{className:"text-[10px] font-bold tracking-[.15em] text-[#2e7d4a]"},"VFO A"),
+            React.createElement("div",{className:"text-[11px] text-[#5a8a6a]"},currentRoom.name+" • RagChew"),
+            React.createElement("div",{className:"ml-auto px-2 py-0.5 rounded bg-[#123524] text-[10px] text-[#4ade80]"},"WIDE")
+          )
+        ),
+
+        React.createElement("div",{className:"mt-4 rounded-[12px] bg-[#0f172a]/60 border border-[#1e293b] p-3"},
+          React.createElement("div",{className:"flex justify-between text-[10px] tracking-widest text-[#5a6a85]"},
+            React.createElement("span",null,"TUNE"),
+            React.createElement("span",{className:"font-mono text-[#4ade80] bg-[#0b1018] border border-[#1e293b] px-2 py-0.5 rounded"},(fineTune>0?"+":"")+(fineTune/1000).toFixed(1)+" kHz")
+          ),
+          React.createElement("div",{className:"text-[11px] text-[#7a8aa6] mt-1"},"Tune ±10 kHz"),
+          React.createElement("div",{className:"flex items-center gap-2 mt-2"},
+            React.createElement("button",{onClick:()=>setFineTune(v=>Math.max(-10000,v-100)),className:"w-8 h-8 rounded-full bg-[#0b1018] border border-[#1e293b] text-white"},"−"),
+            React.createElement("input",{type:"range",min:-10000,max:10000,step:10,value:fineTune,onChange:e=>setFineTune(parseInt(e.target.value)),className:"flex-1 accent-[#22c55e]"}),
+            React.createElement("button",{onClick:()=>setFineTune(v=>Math.min(10000,v+100)),className:"w-8 h-8 rounded-full bg-[#0b1018] border border-[#1e293b] text-white"},"+")
+          ),
+          React.createElement("div",{className:"text-center font-mono text-[12px] text-[#cbd5e1] mt-2"},displayFreq+" MHz")
+        ),
+
+        React.createElement("div",{className:"mt-3 flex flex-col items-center justify-center"},
+          React.createElement("button",{
+            type:"button",
+            onPointerDown:e=>{e.preventDefault();pressPTT();},
+            onPointerUp:e=>{e.preventDefault();releasePTT();},
+            onPointerCancel:releasePTT,
+            onPointerLeave:e=>{if(e.buttons===1) releasePTT();},
+            onKeyDown:e=>{if((e.code==="Space"||e.code==="Enter")&&!e.repeat){e.preventDefault();pressPTT();}},
+            onKeyUp:e=>{if(e.code==="Space"||e.code==="Enter"){e.preventDefault();releasePTT();}},
+            className:`w-[128px] h-[128px] rounded-full ${ptt?"bg-gradient-to-b from-[#16a34a] to-[#14532d] border-[#22c55e]":"bg-gradient-to-b from-[#1e3a8a] to-[#172554] border-[#3b82f6]"} border-[3px] ptt-glow flex flex-col items-center justify-center select-none touch-none cursor-pointer`,
+            title:"Hold to talk"
+          },
+            React.createElement("div",{className:"text-[28px]"},"🎙"),
+            React.createElement("div",{className:"font-extrabold text-white tracking-[.15em] mt-1"},ptt?"TX":"PTT"),
+            React.createElement("div",{className:"text-[10px] tracking-[.2em] text-[#93c5fd] font-bold mt-1"},ptt?"TRANSMITTING":"HOLD TO TALK")
+          ),
+          React.createElement("div",{className:`mt-4 text-[11px] font-bold ${ptt?"text-[#4ade80]":"text-[#7a8aa6]"}`},
+            ptt?"🎙 MICROPHONE LIVE":"Microphone ready for PTT"
+          ),
+          micError && React.createElement("div",{className:"mt-2 text-[11px] text-[#f87171] text-center"},micError)
+        )
+      ),
+
+      React.createElement("section",{className:"rounded-[14px] bg-[#111827]/70 border border-[#1e293b] p-4 flex flex-col"},
+        React.createElement("div",{className:"flex justify-between items-center"},
+          React.createElement("h2",{className:"text-[11px] tracking-[.18em] text-[#7a8aa6] font-bold"},"ROOM CHAT"),
+          React.createElement("div",{className:"w-2 h-2 rounded-full bg-[#22c55e]"})
+        ),
+        React.createElement("div",{className:"mt-4 p-3 rounded-[12px] bg-[#0f172a] border border-[#1e293b]"},
+          React.createElement("div",{className:"font-bold text-white text-[14px]"},currentRoom.name),
+          React.createElement("div",{className:"text-[12px] text-[#7a8aa6] mt-1"},currentRoom.desc),
+          React.createElement("div",{className:"mt-2 inline-flex px-2.5 py-1 rounded-full bg-[#0d1f15] border border-[#1a3a26] text-[11px] text-[#4ade80]"},"● 0 operators")
+        ),
+        React.createElement("div",{className:"mt-auto pt-6 text-center"},
+          premium
+            ? React.createElement("div",{className:"text-[12px] px-3 py-2 rounded-full bg-[#0d1f15] border border-[#1a3a26] text-[#4ade80]"},"✅ Premium Access — All Rooms Unlocked")
+            : React.createElement(React.Fragment,null,
+                React.createElement("div",{className:"text-[12px] px-3 py-2 rounded-full bg-[#1a1010] border border-[#3a2410] text-[#fbbf24]"},"🟢 20m is open • Other rooms are premium"),
+                React.createElement("button",{onClick:openStripe,className:"mt-3 w-full h-[42px] rounded-[10px] bg-gradient-to-r from-amber-400 to-orange-600 text-white font-bold text-[13px]"},"⬆ Upgrade — Unlock All Rooms")
+              )
+        )
+      )
+    ),
+
+    showUnlock && React.createElement("div",{className:"fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm",onClick:e=>{if(e.target===e.currentTarget)setShowUnlock(false)}},
+      React.createElement("div",{className:"w-full max-w-[420px] rounded-[16px] bg-[#111827] border border-[#22304a] shadow-2xl"},
+        React.createElement("div",{className:"px-6 py-5 border-b border-[#1e2a41] flex justify-between items-start"},
+          React.createElement("div",null,
+            React.createElement("h3",{className:"text-[20px] font-extrabold text-white"},"Unlock All Rooms"),
+            React.createElement("p",{className:"text-[12px] text-[#7a8aa6] mt-1"},"Enter the password you received after upgrading.")
+          ),
+          React.createElement("button",{onClick:()=>setShowUnlock(false),className:"w-8 h-8 rounded-full bg-[#0b1018] border border-[#1e293b] text-[#94a3b8]"},"✕")
+        ),
+        React.createElement("div",{className:"p-6"},
+          React.createElement("input",{
+            type:"password",value:code,
+            onChange:e=>{setCode(e.target.value);setError("");},
+            onKeyDown:e=>{if(e.key==="Enter")handleUnlock();},
+            placeholder:"Enter your upgrade password",
+            className:"w-full bg-[#0b1018] border border-[#1e3a4f] rounded-[8px] px-3 py-3 text-sm text-white mb-3 outline-none focus:border-amber-500"
+          }),
+          React.createElement("button",{onClick:handleUnlock,className:"w-full h-[42px] rounded-[8px] bg-gradient-to-r from-amber-400 to-orange-600 text-white font-bold"},"Unlock All Rooms"),
+          error && React.createElement("div",{className:"mt-3 text-[12px] text-[#f87171] bg-[#1a1010] border border-[#3a1a1a] rounded px-3 py-2"},error),
+          success && React.createElement("div",{className:"mt-3 text-[12px] text-[#4ade80] bg-[#0d1f15] border border-[#1a3a26] rounded px-3 py-2"},success),
+          React.createElement("div",{className:"mt-5 text-center text-[11px] text-[#64748b]"},"Need access? Use the Upgrade button to purchase access.")
+        )
+      )
+    ),
+
+    toast && React.createElement("div",{className:"fixed top-[100px] left-1/2 -translate-x-1/2 px-5 py-3 rounded-full bg-[#f59e0b] text-black font-bold text-[13px] shadow-xl z-50"},toast)
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
